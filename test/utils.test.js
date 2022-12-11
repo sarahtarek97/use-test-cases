@@ -6,9 +6,13 @@ const {
   getOrderById,
   getOrders,
   applyDiscount,
+  fetchData,
+  createOrder,
 } = require("../utils");
-
+const { default: axios } = require("axios");
+const email = require("../email");
 const db = require("../db");
+jest.mock("axios");
 
 describe("sum", () => {
   it("should return 2 + 3 = 5", () => {
@@ -94,10 +98,66 @@ describe("getOrders", () => {
 
 describe("applyDiscount", () => {
   it("should apply discount 10% for order price 10", () => {
-    db.getOrder = function (orderId) {
-      return { id: orderId, price: 10 };
-    };
+    // db.getOrder = jest.fn().mockReturnValue({ id: 1, price: 10 })
+    db.getOrder = jest.fn().mockImplementation((id) => {
+      if (id < 5) {
+        return { id, price: 10 };
+      }
+      return { id, price: 8 };
+    });
+    db.updateOrder = jest.fn();
+    // db.getOrder = function (orderId) {
+    //   return { id: orderId, price: 10 }
+    // }
     const order = applyDiscount(1);
     expect(order).toEqual({ id: 1, price: 9 });
+    expect(db.getOrder.mock.calls.length).toBe(1);
+    expect(db.updateOrder.mock.calls.length).toBe(1);
+    expect(db.updateOrder.mock.calls[0][0]).toEqual({ id: 1, price: 9 });
+    expect(db.updateOrder).toHaveBeenCalled();
+    expect(db.updateOrder).toHaveBeenCalledWith({ id: 1, price: 9 });
+    // db.getOrder.mockReset()
+  });
+
+  it("should not apply discount for order price 8", () => {
+    const order = applyDiscount(10);
+    expect(order).toEqual({ id: 10, price: 8 });
+    expect(db.updateOrder.mock.calls.length).toBe(1);
+  });
+});
+
+describe("fetchData", () => {
+  it("should return some data", async () => {
+    axios.get.mockResolvedValue({ id: 5 });
+    const data = await fetchData();
+    expect(data).toEqual({ id: 5 });
+  });
+});
+
+describe("createOrder", () => {
+  it("should throw error if userId not found", async () => {
+    await expect(createOrder()).rejects.toThrowError("userId not found");
+  });
+
+  it("should create the order and send email", async () => {
+    db.createOrder = jest.fn();
+    db.getUser = jest.fn().mockResolvedValue({ email: "test@email.com" });
+    email.sendEmail = jest.fn();
+
+    const message = await createOrder(5, [{ price: 10 }, { price: 20 }]);
+
+    expect(db.createOrder).toHaveBeenCalled();
+    expect(db.createOrder).toHaveBeenCalledWith(5, [
+      { price: 10 },
+      { price: 20 },
+    ]);
+    expect(db.getUser.mock.calls.length).toBe(1);
+    expect(db.getUser.mock.calls[0][0]).toBe(5);
+
+    expect(email.sendEmail.mock.calls.length).toBe(1);
+    expect(email.sendEmail.mock.calls[0][0]).toMatch("test@email.com");
+    expect(email.sendEmail.mock.calls[0][1]).toBe(30);
+
+    expect(message).toMatch('order created')
   });
 });

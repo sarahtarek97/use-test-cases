@@ -1,4 +1,6 @@
+const { default: axios } = require("axios");
 const db = require("./db");
+const email = require('./email')
 
 //test number
 const sum = (a, b) => a + b;
@@ -36,10 +38,31 @@ const applyDiscount = (orderId) => {
 
   if (order.price >= 10) {
     order.price -= order.price * 0.1;
+    db.updateOrder(order);
   }
   return order;
 };
 
+const fetchData = async () => {
+  const data = axios.get("https://url.com");
+  return data;
+};
+
+const createOrder = async (userId, products) => {
+  if (!userId) {
+    throw new Error("userId not found");
+  }
+
+  let totalPrice = 0;
+  products.forEach((product) => (totalPrice += product.price));
+
+  await db.createOrder(userId, products);
+
+  const user = await db.getUser(userId);
+  email.sendEmail(user.email, totalPrice);
+
+  return `order created successfully with totalPrice ${totalPrice} and products ${products}`;
+};
 module.exports = {
   sum,
   greeting,
@@ -48,4 +71,6 @@ module.exports = {
   getOrderById,
   getOrders,
   applyDiscount,
+  fetchData,
+  createOrder
 };
